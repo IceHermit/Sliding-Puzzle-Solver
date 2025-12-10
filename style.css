@@ -1,0 +1,33 @@
+body {
+  background-color: #252422;
+}
+
+td {
+  text-align: center;
+  padding: 20px;
+  font-size: 30px;
+  font-weight: 900;
+  color: #ccc5b9;
+  background-color: #403d39;
+  border-radius: 5px;
+}
+
+.blocked {
+  background-color: #df1c1c;
+}
+
+button {
+  padding: 10px;
+  font-size: 20px;
+  font-weight: 900;
+  color: #ccc5b9;
+  background-color: #eb5e28;
+  border-radius: 5px;
+  margin: 10px;
+  border: none;
+  transition: all 0.1s ease;
+}
+button:hover {
+  background-color: #df1c1c;
+  border-radius: 3px;
+}

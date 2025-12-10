@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Sliding Puzzle</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <div style="display: flex; flex-direction: row; height: 500px">
+      <div style="flex: 100%"></div>
+      <div style="display: flex; flex-direction: column; height: 100%">
+        <div style="flex: 100%"></div>
+        <table id="puzzle"></table>
+      </div>
+      <div style="flex: 100%"></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; height: 200px">
+      <div style="flex: 100%"></div>
+      <div style="display: flex; flex-direction: row; height: 100%">
+        <div style="flex: 100%"></div>
+        <button onclick="reset()">Reset</button>
+        <button onclick="solve()">Solve</button>
+        <button onclick="shuffle()">Shuffle</button>
+        <div style="flex: 100%"></div>
+      </div>
+      <div style="flex: 100%"></div>
+    </div>
+  </body>
+
+  <script src="script.js"></script>
+</html>
