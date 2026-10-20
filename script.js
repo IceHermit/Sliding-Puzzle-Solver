@@ -5,317 +5,279 @@ const original = [
   [16, 17, 18, 19, 20],
   [21, 22, 23, 24, 0],
 ];
-var puzzle = [
-  [1, 2, 3, 4, 5],
-  [6, 7, 8, 9, 10],
-  [11, 12, 13, 14, 15],
-  [16, 17, 18, 19, 20],
-  [21, 22, 23, 24, 0],
-];
 
-var emptyX = 4;
-var emptyY = 4;
+let puzzle;
+let emptyX;
+let emptyY;
+let locked;
 
 const ROWS = 5;
 const COLS = 5;
+const WAIT_TIME = 15;
 
-const WAIT_TIME = 100;
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-update();
-
-document.addEventListener("keydown", function (event) {
-  if (event.key == "ArrowRight") slide(1, 0);
-  else if (event.key == "ArrowLeft") slide(-1, 0);
-  else if (event.key == "ArrowUp") slide(0, -1);
-  else if (event.key == "ArrowDown") slide(0, 1);
-});
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function update() {
+  let html = "";
+  for (let y = 0; y < ROWS; y++) {
+    html += "<tr>";
+    for (let x = 0; x < COLS; x++) {
+      const t = puzzle[y][x];
+      html += "<td>" + (t ? t : "") + "</td>";
+    }
+    html += "</tr>";
+  }
+  document.getElementById("puzzle").innerHTML = html;
 }
 
-async function slide(dx, dy, wait = false) {
-  if (dx && emptyX + dx >= 0 && emptyX + dx < puzzle[0].length) {
-    [puzzle[emptyY][emptyX + dx], puzzle[emptyY][emptyX]] = [
-      puzzle[emptyY][emptyX],
-      puzzle[emptyY][emptyX + dx],
-    ];
-    emptyX += dx;
-  } else if (dy && emptyY + dy >= 0 && emptyY + dy < puzzle.length) {
-    [puzzle[emptyY + dy][emptyX], puzzle[emptyY][emptyX]] = [
-      puzzle[emptyY][emptyX],
-      puzzle[emptyY + dy][emptyX],
-    ];
-    emptyY += dy;
-  }
-
-  if (wait) await sleep(WAIT_TIME);
-
+function reset() {
+  puzzle = original.map(r => r.slice());
+  emptyX = COLS - 1;
+  emptyY = ROWS - 1;
+  locked = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
   update();
 }
 
+async function slide(dx, dy, wait = false) {
+  const nx = emptyX + dx;
+  const ny = emptyY + dy;
+  if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return false;
+  [puzzle[emptyY][emptyX], puzzle[ny][nx]] = [puzzle[ny][nx], puzzle[emptyY][emptyX]];
+  emptyX = nx; emptyY = ny;
+  if (wait) await sleep(WAIT_TIME);
+  update();
+  return true;
+}
+
 function find(n) {
-  for (let y = 0; y < puzzle.length; y++) {
-    const row = puzzle[y];
-    for (let x = 0; x < row.length; x++) {
-      const element = row[x];
-      if (element == n) return [x, y];
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (puzzle[y][x] === n) return [x, y];
     }
   }
   return [-1, -1];
 }
 
-visited = [
-  [false, false, false, false, false],
-  [false, false, false, false, false],
-  [false, false, false, false, false],
-  [false, false, false, false, false],
-  [false, false, false, false, false],
-];
-map = [
-  [0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0],
-];
+async function placeTwoTiles(nA, targetAX, targetAY, nB, targetBX, targetBY) {
+  let [ax, ay] = find(nA);
+  let [bx, by] = find(nB);
 
-function dfs(x, y, targetX, targetY, moves = "X") {
-  if (x == targetX && y == targetY) return moves;
+  if (ax === targetAX && ay === targetAY && bx === targetBX && by === targetBY) return true;
 
-  if (x < 0 || y < 0 || x >= COLS || y >= ROWS || map[y][x] || visited[y][x])
-    return false;
+  const key = (ex, ey, ax, ay, bx, by) => `${ex},${ey},${ax},${ay},${bx},${by}`;
+  const start = { ex: emptyX, ey: emptyY, ax, ay, bx, by };
+  const prev = new Map();
+  prev.set(key(emptyX, emptyY, ax, ay, bx, by), null);
+  const queue = [start];
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  let goal = null;
 
-  visited[y][x] = true;
+  while (queue.length) {
+    const s = queue.shift();
+    if (s.ax === targetAX && s.ay === targetAY && s.bx === targetBX && s.by === targetBY) {
+      goal = s; break;
+    }
 
-  let l = dfs(x - 1, y, targetX, targetY, moves + "L");
-  let r = dfs(x + 1, y, targetX, targetY, moves + "R");
-  let u = dfs(x, y - 1, targetX, targetY, moves + "U");
-  let d = dfs(x, y + 1, targetX, targetY, moves + "D");
+    for (const [dx, dy] of dirs) {
+      const nex = s.ex + dx, ney = s.ey + dy;
+      if (nex < 0 || nex >= COLS || ney < 0 || ney >= ROWS) continue;
+      if (locked[ney][nex]) continue;
 
-  if (l) return l;
-  else if (r) return r;
-  else if (u) return u;
-  else if (d) return d;
+      let nax = s.ax, nay = s.ay, nbx = s.bx, nby = s.by;
+      if (nex === s.ax && ney === s.ay) { nax = s.ex; nay = s.ey; }
+      else if (nex === s.bx && ney === s.by) { nbx = s.ex; nby = s.ey; }
 
-  return false;
-}
-
-async function moveto(x, y) {
-  let moves = dfs(emptyX, emptyY, x, y);
-
-  console.log(
-    "moving from " +
-      emptyX +
-      ", " +
-      emptyY +
-      " to " +
-      x +
-      ", " +
-      y +
-      "\nMoves: " +
-      moves
-  );
-
-  if (moves == false) return false;
-
-  for (let i = 0; i < moves.length; i += 1) {
-    let c = moves[i];
-
-    if (c == "L") {
-      await slide(-1, 0, true);
-    } else if (c == "R") {
-      await slide(1, 0, true);
-    } else if (c == "U") {
-      await slide(0, -1, true);
-    } else if (c == "D") {
-      await slide(0, 1, true);
+      const k = key(nex, ney, nax, nay, nbx, nby);
+      if (!prev.has(k)) {
+        prev.set(k, { from: s, dx, dy });
+        queue.push({ ex: nex, ey: ney, ax: nax, ay: nay, bx: nbx, by: nby });
+      }
     }
   }
 
-  //console.log("movement successful, returning true");
+  if (!goal) { console.error("placeTwoTiles: no path", nA, nB); return false; }
+
+  const moves = [];
+  let cur = goal;
+  while (true) {
+    const k = key(cur.ex, cur.ey, cur.ax, cur.ay, cur.bx, cur.by);
+    const p = prev.get(k);
+    if (!p) break;
+    moves.push([p.dx, p.dy]);
+    cur = p.from;
+  }
+  moves.reverse();
+  for (const [dx, dy] of moves) await slide(dx, dy, true);
+
+  [ax, ay] = find(nA);
+  [bx, by] = find(nB);
+  if (ax !== targetAX || ay !== targetAY || bx !== targetBX || by !== targetBY) {
+    console.error("placeTwoTiles verify failed", nA, nB);
+    return false;
+  }
   return true;
 }
 
-function reset() {
-  puzzle = original;
-  emptyX = 4;
-  emptyY = 4;
+async function placeTile(n, targetX, targetY) {
+  let [tx, ty] = find(n);
+  if (tx === targetX && ty === targetY) {
+    locked[targetY][targetX] = true;
+    return true;
+  }
+
+  const startKey = `${emptyX},${emptyY},${tx},${ty}`;
+  const prev = new Map();
+  prev.set(startKey, null);
+  const queue = [{ ex: emptyX, ey: emptyY, tx, ty }];
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  let goal = null;
+
+  while (queue.length) {
+    const s = queue.shift();
+    if (s.tx === targetX && s.ty === targetY) { goal = s; break; }
+
+    for (const [dx, dy] of dirs) {
+      const nex = s.ex + dx, ney = s.ey + dy;
+      if (nex < 0 || nex >= COLS || ney < 0 || ney >= ROWS) continue;
+      if (locked[ney][nex]) continue;
+
+      let ntx = s.tx, nty = s.ty;
+      if (nex === s.tx && ney === s.ty) { ntx = s.ex; nty = s.ey; }
+
+      const k = `${nex},${ney},${ntx},${nty}`;
+      if (!prev.has(k)) {
+        prev.set(k, { from: s, dx, dy });
+        queue.push({ ex: nex, ey: ney, tx: ntx, ty: nty });
+      }
+    }
+  }
+
+  if (!goal) { console.error("placeTile: no path", n); return false; }
+
+  const moves = [];
+  let cur = goal;
+  while (true) {
+    const k = `${cur.ex},${cur.ey},${cur.tx},${cur.ty}`;
+    const p = prev.get(k);
+    if (!p) break;
+    moves.push([p.dx, p.dy]);
+    cur = p.from;
+  }
+  moves.reverse();
+  for (const [dx, dy] of moves) await slide(dx, dy, true);
+
+  [tx, ty] = find(n);
+  if (tx !== targetX || ty !== targetY) {
+    console.error("placeTile verify failed", n);
+    return false;
+  }
+  locked[targetY][targetX] = true;
+  return true;
+}
+
+async function solve2x2() {
+  const cells = [
+    [COLS - 2, ROWS - 2], [COLS - 1, ROWS - 2],
+    [COLS - 2, ROWS - 1], [COLS - 1, ROWS - 1],
+  ];
+  const target = [
+    (ROWS - 2) * COLS + (COLS - 2) + 1,
+    (ROWS - 2) * COLS + (COLS - 1) + 1,
+    (ROWS - 1) * COLS + (COLS - 2) + 1,
+    0,
+  ];
+
+  const start = cells.map(([x, y]) => puzzle[y][x]);
+  if (start.join(",") === target.join(",")) return;
+
+  const q = [start];
+  const prev = new Map();
+  prev.set(start.join(","), null);
+  let endState = null;
+
+  while (q.length) {
+    const state = q.shift();
+    if (state.join(",") === target.join(",")) { endState = state; break; }
+    const zero = state.indexOf(0);
+    if (zero === -1) { console.error("2x2: empty missing"); return; }
+    const neigh = { 0: [1, 2], 1: [0, 3], 2: [0, 3], 3: [1, 2] };
+    for (const ni of neigh[zero]) {
+      const ns = state.slice();
+      [ns[zero], ns[ni]] = [ns[ni], ns[zero]];
+      const k = ns.join(",");
+      if (!prev.has(k)) {
+        prev.set(k, { state: state.slice(), zero, ni });
+        q.push(ns);
+      }
+    }
+  }
+
+  if (!endState) { console.error("2x2 unsolvable", start); return; }
+
+  const moves = [];
+  let cur = endState;
+  while (true) {
+    const p = prev.get(cur.join(","));
+    if (!p) break;
+    moves.push({ from: p.zero, to: p.ni });
+    cur = p.state;
+  }
+  moves.reverse();
+
+  for (const m of moves) {
+    const [fx, fy] = cells[m.from];
+    const [tx, ty] = cells[m.to];
+    await slide(tx - fx, ty - fy, true);
+  }
+}
+
+async function solve() {
+  locked = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+
+  for (let r = 0; r < ROWS - 2; r++) {
+    for (let c = 0; c < COLS - 2; c++) {
+      const n = r * COLS + c + 1;
+      await placeTile(n, c, r);
+    }
+    const nA = r * COLS + (COLS - 2) + 1;
+    const nB = r * COLS + (COLS - 1) + 1;
+    await placeTwoTiles(nA, COLS - 2, r, nB, COLS - 1, r);
+    locked[r][COLS - 2] = true;
+    locked[r][COLS - 1] = true;
+  }
+
+  const rTop = ROWS - 2;
+  for (let c = 0; c < COLS - 2; c++) {
+    const nTop = rTop * COLS + c + 1;
+    const nBot = (rTop + 1) * COLS + c + 1;
+    await placeTwoTiles(nTop, c, rTop, nBot, c, rTop + 1);
+    locked[rTop][c] = true;
+    locked[rTop + 1][c] = true;
+  }
+
+  await solve2x2();
   update();
 }
 
-var rendered_map = null;
-
-function update() {
-  var innerhtml = "";
-
-  for (let y = 0; y < puzzle.length; y++) {
-    const row = puzzle[y];
-    innerhtml += "<tr>";
-    for (let x = 0; x < row.length; x++) {
-      const tile = row[x];
-      var tag = "";
-      if (rendered_map) if (rendered_map[y][x]) tag = "class= 'blocked'";
-
-      innerhtml += "<td " + tag + ">" + (tile ? tile : "") + "</td>";
-    }
-    innerhtml += "</tr>";
-  }
-
-  document.getElementById("puzzle").innerHTML = innerhtml;
-}
-
-function render(avoidX, avoidY, n) {
-  //visited = [[false,false,false],[false,false,false],[false,false,false]];
-  //map = [[0,0,0],[0,0,0],[0,0,0]];
-
-  visited = [
-    [false, false, false, false, false],
-    [false, false, false, false, false],
-    [false, false, false, false, false],
-    [false, false, false, false, false],
-    [false, false, false, false, false],
-  ];
-  map = [
-    [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0],
-  ];
-
-  let i = 1;
-  while (i < n) {
-    [x, y] = find(i);
-    map[y][x] = 1;
-    i += 1;
-  }
-
-  map[avoidY][avoidX] = 1;
-
-  rendered_map = map;
-
-  console.log("rendered for: (" + avoidX + ", " + avoidY + ", " + n + ")");
-  map.forEach((row) => {
-    console.log(row);
-  });
-}
-
 async function shuffle() {
-  for (let i = 0; i < 20; i++) {
-    let move = Math.floor(Math.random() * 4);
-    if (move == 0) {
-      await slide(0, 1, true);
-      await slide(1, 0, true);
-      await slide(0, -1, true);
-      await slide(-1, 0, true);
-    } else if (move == 1) {
-      await slide(0, -1, true);
-      await slide(0, 1, true);
-      await slide(0, -1, true);
-      await slide(0, -1, true);
-    } else if (move == 2) {
-      await slide(1, 0, true);
-      await slide(0, 1, true);
-      await slide(1, 0, true);
-      await slide(0, 1, true);
-      await slide(1, 0, true);
-    } else if (move == 3) {
-      await slide(-1, 0, true);
-      await slide(0, -1, true);
-      await slide(-1, 0, true);
-      await slide(0, -1, true);
-      await slide(-1, 0, true);
-    }
+  reset();
+  for (let i = 0; i < 200; i++) {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const valid = dirs.filter(([dx, dy]) => {
+      const nx = emptyX + dx, ny = emptyY + dy;
+      return nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS;
+    });
+    const [dx, dy] = valid[Math.floor(Math.random() * valid.length)];
+    await slide(dx, dy, false);
   }
-  await moveto(COLS - 1, ROWS - 1);
+  update();
 }
 
-async function solve(n = 1, render_offset = 0, row_end = false) {
-  if (n > ROWS * COLS) return;
+reset();
 
-  console.log("Solve(" + n + ", " + render_offset + ", " + row_end + ")");
-
-  targetY = Math.floor((n - 1) / COLS);
-  targetX = (n - 1) % COLS;
-
-  if (targetX == COLS - 2) {
-    console.log("m-2 type");
-    targetX++;
-  } else if (targetX == COLS - 1) {
-    console.log("m-1 type");
-    targetY++;
-  } else if (targetX == 0 && targetY != 0 && row_end) {
-    console.log("executing maneuver");
-    render(0, 0, n - 1);
-    await moveto(COLS - 2, targetY);
-    await slide(0, -1, true);
-    await slide(1, 0, true);
-    await slide(0, 1, true);
-  }
-
-  [currX, currY] = find(n);
-
-  render(currX, currY, n - render_offset);
-
-  if (currX == targetX && currY == targetY) {
-    console.log(
-      "Target(" +
-        n +
-        ") reached place: " +
-        currX +
-        ", " +
-        currY +
-        "=" +
-        targetX +
-        ", " +
-        targetY
-    );
-    update();
-    if (render_offset) {
-      console.log(
-        "solved the submaze using render_offset, now solving for n = " +
-          (n - render_offset >= 1)
-          ? n - render_offset
-          : 1
-      );
-      await solve(n - render_offset >= 1 ? n - render_offset : 1);
-    } else {
-      if (n % COLS == 0 && n != 1) await solve(n + 1, render_offset, true);
-      else await solve(n + 1);
-    }
-    return;
-  }
-
-  if (currX > targetX) {
-    if (await moveto(currX - 1, currY)) await slide(1, 0, true);
-    else {
-      console.log(
-        "can't solve this maze, going back by: " + (render_offset + 1)
-      );
-      await solve(n, render_offset + 1);
-      return;
-    }
-  } else if (currX < targetX) {
-    if (await moveto(currX + 1, currY)) await slide(-1, 0, true);
-    else {
-      console.log(
-        "can't solve this maze, going back by: " + (render_offset + 1)
-      );
-      await solve(n, render_offset + 1);
-      return;
-    }
-  } else if (currY > targetY) {
-    if (await moveto(currX, currY - 1)) {
-      await slide(0, 1, true);
-    } else {
-      console.log(
-        "can't solve this maze, going back by: " + (render_offset + 1)
-      );
-      await solve(n, render_offset + 1);
-      return;
-    }
-  }
-
-  await solve(n, render_offset);
-}
+document.addEventListener("keydown", function (event) {
+  if (event.key === "ArrowRight") slide(1, 0);
+  else if (event.key === "ArrowLeft") slide(-1, 0);
+  else if (event.key === "ArrowUp") slide(0, -1);
+  else if (event.key === "ArrowDown") slide(0, 1);
+});
