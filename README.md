@@ -12,6 +12,5 @@ The puzzle is seen as a series of small mazes, where each of the tile is placed 
 
 <img width="424" height="430" alt="image" src="https://github.com/user-attachments/assets/12a1de6a-d885-417c-864f-981db95ee4e4" />
 
-This divide-and-conquer approach is not viable in its raw form, as there will be situations where the maze is impossible to solve, in this case the algorithm handles each of these exceptions separately
-
-The algoritm is a work in progress
+Once all but the last two rows are solved using this maze-solving approach, the same approach is used for solving the columns. Again the last two columns are left unsolved,
+giving a 2x2 sliding puzzle. This can be solved by simply cycling through all 4 orientations. 
